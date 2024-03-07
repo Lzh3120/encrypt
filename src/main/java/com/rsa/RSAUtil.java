@@ -1,11 +1,12 @@
-package com.zh.sm2;
+package com.rsa;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -15,48 +16,45 @@ import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
-import java.security.Security;
 import java.security.Signature;
 import java.security.SignatureException;
-import java.security.spec.ECGenParameterSpec;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
 
 import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.crypto.encodings.PKCS1Encoding;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.PKCS8Generator;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.openssl.jcajce.JcaPKCS8Generator;
+import org.bouncycastle.util.encoders.Hex;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemReader;
 
 import com.util.Base64Util;
 
-/**
- * 公私钥工具类
- * 
- * @author Administrator
- *
- */
-public class SM2Util {
+public class RSAUtil {
 
 	public static void main(String[] args) throws Exception {
-		KeyPair keyPair = generateKey();
-
+		// 生成RSA公私钥对
+		KeyPair keyPair = generateRSAKeyPair();
 		PublicKey publicKey = keyPair.getPublic();
 		PrivateKey privateKey = keyPair.getPrivate();
+
+		System.out.println("生成公私钥");
+		System.out.println("Hex公钥：" + Hex.toHexString(publicKey.getEncoded()));
+		System.out.println("Hex私钥：" + Hex.toHexString(privateKey.getEncoded()));
 
 		System.out.println("生成公私钥");
 		System.out.println("Base64公钥：" + Base64Util.byteToBase64(publicKey.getEncoded()));
@@ -93,70 +91,53 @@ public class SM2Util {
 		writePublicKeyPem(readPublicKey, "pubKey.pem");
 		PublicKey readPublicKeyPem = readPublicKeyPem2("pubKey.pem");
 		System.out.println("pem读取公钥：" + Base64Util.byteToBase64(readPublicKeyPem.getEncoded()));
-
+		
 		writeECPrivateKeyPem(readPrivateKey, "privKey.pem");
 		PrivateKey readPrivateKeyPem = readECPrivateKeyPem("privKey.pem");
 		System.out.println("pem读取私钥：" + Base64Util.byteToBase64(readPrivateKeyPem.getEncoded()));
-
 	}
 
-	// 生成公私钥对
-	public static KeyPair generateKey() throws Exception {
-		// 添加 BouncyCastle 兼容包
-		Security.addProvider(new BouncyCastleProvider());
-
-		KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC", "BC");
-
-		keyPairGenerator.initialize(new ECGenParameterSpec("sm2p256v1"), new SecureRandom());
-		// 生成密钥对
-		final KeyPair keyPair = keyPairGenerator.generateKeyPair();
+	public static KeyPair generateRSAKeyPair() throws NoSuchAlgorithmException {
+		KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+		keyPairGenerator.initialize(2048, new SecureRandom()); // 使用2048位密钥长度
+		KeyPair keyPair = keyPairGenerator.generateKeyPair();
 		return keyPair;
 	}
 
-	// 读取公钥
-	public static PublicKey readPublicKey(byte[] publicKeyBytes)
-			throws NoSuchAlgorithmException, InvalidKeySpecException {
-		X509EncodedKeySpec keySpec = new X509EncodedKeySpec(publicKeyBytes);
-		// 生成 Java 公私钥对象
-		KeyFactory keyFactory = KeyFactory.getInstance("EC", new BouncyCastleProvider());
-		PublicKey publicKey = keyFactory.generatePublic(keySpec);
-		return publicKey;
-	}
-
-	// 读取私钥
-	public static PrivateKey readPrivateKey(byte[] privateKeyBytes)
-			throws NoSuchAlgorithmException, InvalidKeySpecException {
-		PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKeyBytes);
-		// 生成 Java 公私钥对象
-		KeyFactory keyFactory = KeyFactory.getInstance("EC", new BouncyCastleProvider());
-		PrivateKey privateKey = keyFactory.generatePrivate(privateKeySpec);
-		return privateKey;
-	}
-
-	// 公钥加密
-	public static byte[] encrypt(PublicKey publicKey, byte[] data)
-			throws NoSuchAlgorithmException, NoSuchProviderException, NoSuchPaddingException, InvalidKeyException,
-			IllegalBlockSizeException, BadPaddingException {
-		Cipher cipher = Cipher.getInstance("SM2", "BC");
+	public static byte[] encrypt(PublicKey publicKey, byte[] plaintext) throws Exception {
+		Cipher cipher = Cipher.getInstance("RSA");
 		cipher.init(Cipher.ENCRYPT_MODE, publicKey);
-		byte[] ciperData = cipher.doFinal(data);
-		return ciperData;
+		byte[] ciphertext = cipher.doFinal(plaintext);
+		return ciphertext;
 	}
 
-	// 私钥解密
-	public static byte[] decrypt(PrivateKey privateKey, byte[] cipherDate)
-			throws NoSuchAlgorithmException, NoSuchProviderException, NoSuchPaddingException, InvalidKeyException,
-			IllegalBlockSizeException, BadPaddingException {
-		Cipher cipher = Cipher.getInstance("SM2", "BC");
+	public static byte[] decrypt(PrivateKey privateKey, byte[] ciphertext) throws Exception {
+		Cipher cipher = Cipher.getInstance("RSA");
 		cipher.init(Cipher.DECRYPT_MODE, privateKey);
-		byte[] data = cipher.doFinal(cipherDate);
-		return data;
+		byte[] plaintext = cipher.doFinal(ciphertext);
+		return plaintext;
+	}
+
+	public static PublicKey readPublicKey(byte[] publicKey) throws NoSuchAlgorithmException, InvalidKeySpecException {
+		// 私钥
+		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+		X509EncodedKeySpec keySpec = new X509EncodedKeySpec(publicKey);
+		return keyFactory.generatePublic(keySpec);
+
+	}
+
+	public static PrivateKey readPrivateKey(byte[] privateKey)
+			throws NoSuchAlgorithmException, InvalidKeySpecException {
+		// 私钥
+		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+		PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKey);
+		return keyFactory.generatePrivate(privateKeySpec);
 	}
 
 	// 私钥签名
 	public static byte[] sign(PrivateKey privateKey, byte[] data)
 			throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeyException, SignatureException {
-		Signature signature = Signature.getInstance("SM3withSM2", "BC");
+		Signature signature = Signature.getInstance("SHA256withRSA");
 		signature.initSign(privateKey);
 		signature.update(data);
 		byte[] sign = signature.sign();
@@ -166,7 +147,7 @@ public class SM2Util {
 	// 公钥验签
 	public static Boolean verify(PublicKey publicKey, byte[] data, byte[] sign)
 			throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeyException, SignatureException {
-		Signature signature = Signature.getInstance("SM3withSM2", "BC");
+		Signature signature = Signature.getInstance("SHA256withRSA");
 		signature.initVerify(publicKey);
 		signature.update(data);
 		return signature.verify(sign);
@@ -175,7 +156,8 @@ public class SM2Util {
 	// 生成公钥PEM
 	public static void writePublicKeyPem(PublicKey publicKey, String path) throws IOException {
 		File file = new File(path);
-		try (FileWriter writerPub = new FileWriter(file); JcaPEMWriter pemWriterPub = new JcaPEMWriter(writerPub);) {
+		try(FileWriter writerPub = new FileWriter(file);
+				JcaPEMWriter pemWriterPub = new JcaPEMWriter(writerPub);){
 			pemWriterPub.writeObject(
 					new SubjectPublicKeyInfo((ASN1Sequence) ASN1Primitive.fromByteArray(publicKey.getEncoded())));
 		}
@@ -184,15 +166,14 @@ public class SM2Util {
 	// 生成私钥PEM
 	public static void writePrivateKeyPem(PrivateKey privateKey, String path) throws IOException {
 		File file = new File(path);
-
-		try (FileWriter writerPriv = new FileWriter(file); JcaPEMWriter pemWriterPriv = new JcaPEMWriter(writerPriv);) {
-			PKCS8Generator pkcs8Generator = new JcaPKCS8Generator(privateKey, null);
+		try(FileWriter writerPriv = new FileWriter(file);
+				JcaPEMWriter pemWriterPriv = new JcaPEMWriter(writerPriv);){
+			PKCS8Generator pkcs8Generator = new JcaPKCS8Generator(privateKey, null);  
 			PemObject generate = pkcs8Generator.generate();
 			pemWriterPriv.writeObject(generate);
 		}
-
 	}
-
+	
 	// 生成私钥PEM
 	public static void writeECPrivateKeyPem(PrivateKey privateKey, String path) throws IOException {
 		File file = new File(path);
@@ -202,26 +183,24 @@ public class SM2Util {
 		}
 	}
 
-	// 读取公钥PEM
-	public static PublicKey readPublicKeyPem(String path)
-			throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
+	//读取公钥PEM
+	public static PublicKey readPublicKeyPem(String path) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 		File file = new File(path);
-		KeyFactory keyFactory = KeyFactory.getInstance("EC", new BouncyCastleProvider());
-		try (FileReader keyReader = new FileReader(file); PemReader pemReader = new PemReader(keyReader)) {
+		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+		try(FileReader keyReader = new FileReader(file);
+			PemReader pemReader = new PemReader(keyReader)){
 			PemObject pemObject = pemReader.readPemObject();
 			byte[] content = pemObject.getContent();
 			X509EncodedKeySpec keySpec = new X509EncodedKeySpec(content);
 			return keyFactory.generatePublic(keySpec);
 		}
 	}
-
-	// 读取公钥PEM
-	// https://blog.csdn.net/sonadorje/article/details/118693195
-	public static PublicKey readPublicKeyPem2(String path)
-			throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
+	//读取公钥PEM
+	//https://blog.csdn.net/sonadorje/article/details/118693195
+	public static PublicKey readPublicKeyPem2(String path) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 		File file = new File(path);
-		KeyFactory keyFactory = KeyFactory.getInstance("EC", new BouncyCastleProvider());
-		try (FileReader keyReader = new FileReader(file)) {
+		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+		try(FileReader keyReader = new FileReader(file)){
 			PEMParser pemParser = new PEMParser(keyReader);
 			JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
 			SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(pemParser.readObject());
@@ -229,12 +208,12 @@ public class SM2Util {
 		}
 	}
 
-	// 读取私钥PEM
-	public static PrivateKey readPrivateKeyPem(String path)
-			throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
+	//读取私钥PEM
+	public static PrivateKey readPrivateKeyPem(String path) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 		File file = new File(path);
-		KeyFactory keyFactory = KeyFactory.getInstance("EC", new BouncyCastleProvider());
-		try (FileReader keyReader = new FileReader(file); PemReader pemReader = new PemReader(keyReader)) {
+		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+		try(FileReader keyReader = new FileReader(file);
+			PemReader pemReader = new PemReader(keyReader)){
 			PemObject pemObject = pemReader.readPemObject();
 			byte[] content = pemObject.getContent();
 			System.out.println(content.length);
@@ -243,19 +222,18 @@ public class SM2Util {
 			return keyFactory.generatePrivate(privateKeySpec);
 		}
 	}
-
-	// 读取私钥PEM
-	public static PrivateKey readPrivateKeyPem1(String path)
-			throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
+	
+	//读取私钥PEM
+	public static PrivateKey readPrivateKeyPem2(String path) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 		File file = new File(path);
-		try (FileReader keyReader = new FileReader(file)) {
+		try(FileReader keyReader = new FileReader(file)){
 			PEMParser pemParser = new PEMParser(keyReader);
 			JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
 			PrivateKeyInfo privateKeyInfo = PrivateKeyInfo.getInstance(pemParser.readObject());
 			return converter.getPrivateKey(privateKeyInfo);
 		}
 	}
-
+	
 	// 读取私钥PEM
 	public static PrivateKey readECPrivateKeyPem(String path)
 			throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
