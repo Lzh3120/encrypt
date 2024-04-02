@@ -177,7 +177,7 @@ public class SM2Util {
 		File file = new File(path);
 		try (FileWriter writerPub = new FileWriter(file); JcaPEMWriter pemWriterPub = new JcaPEMWriter(writerPub);) {
 			pemWriterPub.writeObject(
-					new SubjectPublicKeyInfo((ASN1Sequence) ASN1Primitive.fromByteArray(publicKey.getEncoded())));
+					SubjectPublicKeyInfo.getInstance((ASN1Sequence) ASN1Primitive.fromByteArray(publicKey.getEncoded())));
 		}
 	}
 

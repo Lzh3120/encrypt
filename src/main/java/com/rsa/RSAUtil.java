@@ -159,7 +159,7 @@ public class RSAUtil {
 		try(FileWriter writerPub = new FileWriter(file);
 				JcaPEMWriter pemWriterPub = new JcaPEMWriter(writerPub);){
 			pemWriterPub.writeObject(
-					new SubjectPublicKeyInfo((ASN1Sequence) ASN1Primitive.fromByteArray(publicKey.getEncoded())));
+					SubjectPublicKeyInfo.getInstance((ASN1Sequence) ASN1Primitive.fromByteArray(publicKey.getEncoded())));
 		}
 	}
 
